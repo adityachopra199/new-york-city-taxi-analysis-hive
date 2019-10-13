@@ -1,0 +1,659 @@
+-- <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< HIVE Assignment >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
+-- Data cleaning
+-- tpep_pickup_datetime >= "2018-11-01" and tpep_pickup_datetime <= "2018-12-31"
+-- tpep_dropoff_datetime >= "2018-11-01" and tpep_dropoff_datetime <= "2018-12-31"
+-- tpep_dropoff_datetime > tpep_pickup_datetime
+-- passenger_count >= 1 and passenger_count <= 6
+-- trip_distance > 0
+-- ratecodeid = 1 or ratecodeid = 2 or ratecodeid = 3 or ratecodeid = 4 or ratecodeid = 5 or ratecodeid = 6
+-- fare_amount >= 0
+-- extra >= 0
+-- tip_amount >= 0
+-- tolls_amount >= 0
+-- improvement_surcharge = 0.3
+-- total_amount = fare_amount + extra + mta_tax + tip_amount + tolls_amount + improvement_surcharge
+
+-- =========================================================================================================================================================================
+
+-- Assumptions	
+-- The data for the dates not falling in the range from 2018-11-01 to 2018-12-31 have been considered as erroneous as it was clearly mentioned that the data belongs
+only these dates
+-- The passenger count has been assumed to be between 1 & 6 and not 0 or more than 6
+-- The trips with total_distance 0 & trip_amount non-zero has been considered as erroneous as for some of the trips even though the total_distance is 0 but total_amount was quite huge
+-- The ratecodeid 9 is an erroneous value which have been spotted in the given dataset
+-- The records with fare_amount negative have been considered to be erroneous. However, a trip's fare_amount may be 0 due to some promocode applied
+-- The trip disance must be greater than 0 for all the valid records
+-- The extra amount charged can be 0 or more than 0 but cannot be negative
+-- The mta_tax amount cannot be negative
+-- The tip_amount must be greater than or equal to 0 but not negative
+-- tolls_amount must be greater than or equal to 0 but not negative
+-- improvement_surcharge must have only value as 0.3 and no other value must be present according to the data dictionary
+-- total_amount must be equal to the some of all the taxes & charges 
+-- pickup datetime must be less than the drop off time. The cases where drop off datetime is less or equal to the pickup datetime has been considered invalid
+
+-- =========================================================================================================================================================================
+
+-- Adding JAR to the environment
+ADD JAR /opt/cloudera/parcels/CDH/lib/hive/lib/hive-hcatalog-core-1.1.0-cdh5.11.2.jar;
+
+-- Creating external table with the Taxi data
+CREATE EXTERNAL TABLE yellow_trip_data_v1 (
+vendor_id CHAR(1),
+tpep_pickup_datetime TIMESTAMP,
+tpep_dropoff_datetime TIMESTAMP,
+passenger_count INT,
+trip_distance DOUBLE,
+RatecodeID CHAR(1),
+store_and_fwd_flag CHAR(1),
+PULocationID INT,
+DOLocationID INT,
+payment_type CHAR(1),
+fare_amount DOUBLE,
+extra DOUBLE,
+mta_tax DOUBLE,
+tip_amount DOUBLE,
+tolls_amount DOUBLE,
+improvement_surcharge DOUBLE,
+total_amount DOUBLE
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+LOCATION '/common_folder/nyc_taxi_data/'
+tblproperties ("skip.header.line.count"="1");
+
+-- Checking the count of rows in the new table
+select count(*) as row_count from yellow_trip_data_v1;
+-- The total number of rows are 11,74,569
+
+-- Verifying the record count by uploading the data file given on the UpGrad platform
+CREATE EXTERNAL TABLE IF NOT EXISTS yellow_trip_own_data (
+vendor_id CHAR(1),
+tpep_pickup_datetime TIMESTAMP,
+tpep_dropoff_datetime TIMESTAMP,
+passenger_count INT,
+trip_distance DOUBLE,
+RatecodeID CHAR(1),
+store_and_fwd_flag CHAR(1),
+PULocationID INT,
+DOLocationID INT,
+payment_type CHAR(1),
+fare_amount DOUBLE,
+extra DOUBLE,
+mta_tax DOUBLE,
+tip_amount DOUBLE,
+tolls_amount DOUBLE,
+improvement_surcharge DOUBLE,
+total_amount DOUBLE
+)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+LOCATION '/user/1995adityachopra_gmail/taxi_data'
+tblproperties ("skip.header.line.count"="1");
+
+-- Getting count of the records from the table created by manually uploading the file
+select count(*) as recordCount from yellow_trip_own_data;
+-- The total number of rows are 11,74,569
+
+-- Therefore, as seen above, the count has been verified both by creating a table using the data given in the common folder as well as the data given for download
+-- I uploaded the data provided on the Upgrad website, uploaded it to my HDFS folder & create a table, the count in both the tables came out to be same
+
+-- Checking the data in the table, checking if any columns has turned into Null(s) due to incorrect datatype
+select * from yellow_trip_data_v1 limit 10;
+-- The data seems to be correct, the header has been skipped successfully
+
+-- Getting the earliest pickup date from the table
+SELECT min(tpep_pickup_datetime) from yellow_trip_data_v1 
+-- The earliest pick up date comes out to be 2003-01-01 00:58:00.0, which means that there are some incorrect records in the provided dataset
+
+-- getting the last pickup date in the data 
+SELECT max(tpep_pickup_datetime) from yellow_trip_data_v1 
+-- The last pick up date comes out to be 2018-01-01 00:04:00.0, which meanas that there are some incorrect records in the provided dataset
+
+-- Checking number of null values in each of the columns of the table
+
+-- checking number of null values in the column tpep_pickup_datetime
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where tpep_pickup_datetime is null ;
+-- No null values were found in the column tpep_pickup_datetime
+
+-- checking number of null values in the column tpep_dropoff_datetime
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where tpep_dropoff_datetime is null ;
+-- No null values were found in the column tpep_dropoff_datetime
+
+-- checking number of null values in the column passenger_count
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where passenger_count is null ;
+-- No null values were found in the column passenger_count
+
+-- checking number of null values in the column trip_distance
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where trip_distance is null ;
+-- No null values were found in the column trip_distance
+
+-- checking number of null values in the column ratecodeid
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where ratecodeid is null ;
+-- No null values were found in the column ratecodeid
+
+-- checking number of null values in the column store_and_fwd_flag
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where store_and_fwd_flag is null ;
+-- No null values were found in the column store_and_fwd_flag
+
+-- checking number of null values in the column pulocationid
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where pulocationid is null ;
+-- No null values were found in the column pulocationid
+
+-- checking number of null values in the column dolocationid
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where dolocationid is null ;
+-- No null values were found in the column dolocationid
+
+-- checking number of null values in the column payment_type
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where payment_type is null ;
+-- No null values were found in the column payment_type
+
+-- checking number of null values in the column fare_amount
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where fare_amount is null ;
+-- No null values were found in the column fare_amount
+
+-- checking number of null values in the column extra
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where extra is null ;
+-- No null values were found in the column extra
+
+-- checking number of null values in the column mta_tax
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where mta_tax is null ;
+-- No null values were found in the column mta_tax
+
+-- checking number of null values in the column tip_amount
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where tip_amount is null ;
+-- No null values were found in the column tip_amount
+
+-- checking number of null values in the column tolls_amount
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where tolls_amount is null ;
+-- No null values were found in the column tolls_amount
+
+-- checking number of null values in the column improvement_surcharge
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where improvement_surcharge is null ;
+-- No null values were found in the column improvement_surcharge
+
+-- checking number of null values in the column total_amount
+select count(*) as NumberOfNullValues from yellow_trip_data_v1 where total_amount is null ;
+-- No null values were found in the column total_amount
+
+-- How many records has each TPEP provider provided? Write a query that summarises the number of records of each provider.
+-- Checking number of records from each vendor
+select vendor_id, count(*) as number_of_records
+from yellow_trip_data_v1
+group by vendor_id
+-- 1	527386
+-- 2	647183
+-- Vendor with vendor id 1 has provided 5,27,386 records whereas vendor with vendor id 2 has provided 6,47,183 records
+
+
+-- checking vendor Id(s) i.e. vendor id(s) must not be other than 1/2
+select vendor_id 
+from yellow_trip_data_v1 
+group by vendor_id
+order by vendor_id;
+-- Therefore, we have data for vendors with vendor_id 1 & 2 only which is absolutely correct
+
+
+-- Let's create a new table with data only for November & December to avoid unnecessary delayed execution 
+-- One way is to use where clause to filter out the data for November & December 2017 but to improve execution speed, the table needs to be partitioned
+-- For now, we'll create new table with November & December data only as its mentioned as the first step for the analysis & quality check
+CREATE TABLE yellow_trip_data_required_data AS 
+SELECT * FROM yellow_trip_data_v1 WHERE
+YEAR(tpep_pickup_datetime) = 2017 AND (
+MONTH(tpep_pickup_datetime) = 11 OR
+MONTH(tpep_pickup_datetime) = 12
+)
+
+-- Let's check if the new table has the data only from November to December 2017
+select min(tpep_pickup_datetime), max(tpep_pickup_datetime), min(tpep_dropoff_datetime), max(tpep_dropoff_datetime) 
+from yellow_trip_data_required_data;
+-- For the columns tpep_pickup_datetime the dates are perfectly fine as needed but for tpep_dropoff_datetime there needs to 
+-- be more error handling as we're still getting the max dropoff datetime as 2019-04-24 19:21:00.0
+
+-- Number of records for the November & December 2017
+select count(*) from yellow_trip_data_required_data;
+-- Therefore, the total number of rows for the month of Nobember & December 2017 are 11,74,555
+-- As we saw that there is just a few rows of decrease when we created a new table by filtering on the basis of tpep_pickup_datetime
+-- Therefore, this means that there are few erroneous rows which contain incorrect pickup_date_time. Let's analyze those
+
+-- Let's check the incorrect pick up & drop off date time(s)
+select vendor_id, tpep_pickup_datetime, tpep_dropoff_datetime 
+from yellow_trip_data_v1
+where 
+date(tpep_pickup_datetime) < "2017-11-01" or
+date(tpep_pickup_datetime) > "2017-12-31" or
+date(tpep_dropoff_datetime) < "2017-11-01" or
+date(tpep_dropoff_datetime) > "2017-12-31"
+order by date(tpep_pickup_datetime)
+-- There is unusual datetime(s) recorded i.e. 2003, 2019, 2008, 2009. Let's check how many errors are there vendor wise
+
+-- Let's check the number of rows with incorrect pick up date time for each vendor
+select vendor_id, count(*) as incorrect_pickup_datetime
+from yellow_trip_data_v1
+where 
+date(tpep_pickup_datetime) < "2017-11-01" or
+date(tpep_pickup_datetime) > "2017-12-31"
+group by vendor_id;
+-- For pickup datetime, the number of rows containing incorrect_dropoff_datetime are 0 for vendor 1 and 14 for vendor 2
+
+-- Let's check the number of rows with incorrect drop off date time for each vendor
+select vendor_id, count(*) as incorrect_dropoff_datetime
+from yellow_trip_data_v1
+where 
+date(tpep_dropoff_datetime) < "2017-11-01" or
+date(tpep_dropoff_datetime) > "2017-12-31"
+group by vendor_id;
+-- For drop off datetime, the number of rows containing incorrect_dropoff_datetime are 29 for vendor 1 and 88 for vendor 2
+
+-- Let's check passenger_count for each of the vendors
+select vendor_id, passenger_count, count(*) as number_of_records
+from yellow_trip_data_v1
+group by vendor_id, passenger_count
+order by vendor_id, passenger_count;
+-- we have passenger count as 0 for 6813 records for vendor 1 whereas for vendor 2 there are 11 records with 0 passenger count
+-- Also, unuasual passenger count i.e. 7, 8, 9 is seen in the dataset which we'll remove when creating the final partitioned table
+
+
+-- Let's check trip distance i.e. it must not be negative or 0
+select vendor_id, trip_distance, count(*) as number_of_rows
+from yellow_trip_data_v1
+where trip_distance <= 0
+group by vendor_id, trip_distance
+order by vendor_id, trip_distance;
+-- Therefore, we have found that for vendor id 1 there are 4217 number of records with 0 trip distance & for vendor id 2 there are 3185 number of records with 0 trip distance
+-- However, ther are no negative distances found.
+-- But these might be the trips which were cancelled, let's explore more
+
+-- Let's check records where total_amount is not equal to 0 but the trip_distance is 0
+select vendor_id, trip_distance, total_amount
+from yellow_trip_data_v1 
+where trip_distance = 0 and total_amount !=0 limit 50;
+-- There are many records where total_amount is quite huge even though the trip distance is 0, we'll consider these as erroneous
+
+-- Let's get the number of records where total_amount is not equal to 0 but the trip_distance is 0
+select count(*)
+from yellow_trip_data_v1 
+where trip_distance = 0 and total_amount !=0 limit 50;
+-- The number of such records are found to be 7294
+
+-- Check on ratecodeid, ratecodeid must not be other than 1,2,3,4,5,6
+select vendor_id, ratecodeid,count(*) numberOfTransactions 
+from yellow_trip_data_v1
+group by vendor_id, ratecodeid
+order by vendor_id, ratecodeid;
+-- For column ratecodeid, there are seen some non-required values i.e. 9 is also a value in this column which should not
+-- exist accoding to the data dictionary
+-- Segregating on basis of vendors, vendor with vendor_id 1 has 8 such rows & vendor with vendor_id 2 has 1 such row
+
+
+-- Check on store_and_fwd_flag i.e. it must be nothing other than 'Y' or 'N'
+select distinct(store_and_fwd_flag)
+from yellow_trip_data_v1;
+-- Therefore, we don't have any other value in the column store_and_fwd_flat apart from 'Y' or 'N'
+
+-- Check on pulocationid & dolocationid i.e. both of these must not be negative
+select count(*)
+from yellow_trip_data_v1
+where pulocationid<0 or
+dolocationid < 0
+-- There is no record in the data with negative pulocationid or dolocationid
+
+-- Check on ratecodeid, ratecodeid must not be other than 1,2,3,4,5,6
+select payment_type,count(*) numberOfTransactions 
+from yellow_trip_data_v1
+group by payment_type
+-- There is no other payment_type found in the dataset, it is seen that credit_card is the most used payment & voided_trip is not at all used as a payment_type
+
+-- Let's check min, max, mean, mode fare amount
+select min(fare_amount) as minimum_fare_amount, max(fare_amount) as maximium_fare_amount, avg(fare_amount) as average_fare_amount
+from yellow_trip_data_v1
+-- Minimum fare amount has found to be -200, maximum fare amount has been found to be 650 & average fare amount has been found to be 12.99
+-- We'll remove the records with negative fare amount
+
+
+-- Let's check which vendor has records with negative fare_amount
+select vendor_id, count(*) 
+from yellow_trip_data_v1
+where fare_amount < 0
+group by vendor_id;
+-- Vendor 2 has 558 records with negative fare_amount wheras vendor 1 has no such record
+
+
+-- Let's check which vendor has records with negative extra amount
+select vendor_id, count(*) 
+from yellow_trip_data_v1
+where extra < 0
+group by vendor_id;
+-- Vendor 2 has 285 records with negative extra amount whereas vendor 1 has only 1 such record
+
+
+-- Let's check which vendor has records with negative mta_tax amount
+select vendor_id, count(*) 
+from yellow_trip_data_v1
+where mta_tax < 0
+group by vendor_id;
+-- Vendor 2 has 544 records with negative mta_tax amount
+
+-- Let's check which vendor has records with negative tip_amount amount
+select vendor_id, count(*) 
+from yellow_trip_data_v1
+where tip_amount < 0
+group by vendor_id;
+-- Vendor 2 has 4 records with negative tip_amount
+
+-- Let's check which vendor has records with negative tolls_amount 
+select vendor_id, count(*) 
+from yellow_trip_data_v1
+where tolls_amount < 0
+group by vendor_id;
+-- Vendor 2 has 3 records with negative tolls_amount
+
+-- Let's check which vendor has records with negative improvement_surcharge amount
+select vendor_id, count(*) 
+from yellow_trip_data_v1
+where improvement_surcharge < 0
+group by vendor_id;
+-- Vendor 2 has 558 records with negative improvement_surcharge amount whereas vendor 1 has no such record
+
+-- Let's check which vendor has records with negative total_amount
+select vendor_id, count(*) 
+from yellow_trip_data_v1
+where total_amount < 0
+group by vendor_id;
+-- Vendor 2 has 558 records with negative total_amount whereas vendor 1 has no such record
+
+-- checking the value of mta_tax must be only 0.5 according to the given data dictionary
+SELECT mta_tax, count(*)
+FROM yellow_trip_data_v1
+group by mta_tax;
+-- it is found that there are erroneous values in this column i.e. -0.5, 3, 11.4 
+
+-- checking the value of improvement_surcharge must be only 0.3 according to the given data dictionary
+SELECT improvement_surcharge, count(*)
+FROM yellow_trip_data_v1
+group by improvement_surcharge;
+-- it is found that there are erroneous values in this column i.e. -0.3, 0, 1 which will be removed
+
+-- checking the value of extra must be only 0.5 according to the given data dictionary
+SELECT extra, count(*)
+FROM yellow_trip_data_v1
+group by extra;
+-- It is found that there are erroneous values in this column i.e. negative values & 0 as well.
+-- We assume that the values with 0 as extra amount means that no extra charge has been paid
+
+-- Checking the number of records where pickup time is greater than or equal to drop off time
+SELECT vendor_id, count(*)
+from yellow_trip_data_v1
+where tpep_pickup_datetime >= tpep_dropoff_datetime
+group by vendor_id;
+-- 1	3492
+-- 2	3063
+-- These are the records with incorrect pickup or drop off datetime
+
+-- Creating partitioned table partitioned on month & year
+SET hive.exec.max.dynamic.partitions=100000;
+SET hive.exec.max.dynamic.partitions.pernode=100000;
+CREATE TABLE IF NOT EXISTS yellow_trip_data_partitioned (
+vendor_id CHAR(1),
+tpep_pickup_datetime TIMESTAMP,
+tpep_dropoff_datetime TIMESTAMP,
+passenger_count INT,
+trip_distance DOUBLE,
+RatecodeID CHAR(1),
+store_and_fwd_flag CHAR(1),
+PULocationID INT,
+DOLocationID INT,
+payment_type CHAR(1),
+fare_amount DOUBLE,
+extra DOUBLE,
+mta_tax DOUBLE,
+tip_amount DOUBLE,
+tolls_amount DOUBLE,
+improvement_surcharge DOUBLE,
+total_amount DOUBLE
+)
+PARTITIONED BY (year int, month int)
+LOCATION '/user/1995adityachopra_gmail/taxi_data_partitioned';
+
+
+-- Inserting data to the partitioned table by filtering out the erroneous rows
+INSERT INTO yellow_trip_data_partitioned PARTITION(year, month)
+SELECT 
+vendor_id ,
+tpep_pickup_datetime ,
+tpep_dropoff_datetime ,
+passenger_count ,
+trip_distance ,
+RatecodeID ,
+store_and_fwd_flag ,
+PULocationID ,
+DOLocationID ,
+payment_type ,
+fare_amount ,
+extra ,
+mta_tax ,
+tip_amount ,
+tolls_amount ,
+improvement_surcharge ,
+total_amount,
+year(tpep_pickup_datetime) as year,
+month(tpep_pickup_datetime) as month
+FROM yellow_trip_data_v1 
+WHERE
+(DATE(tpep_pickup_datetime) >= "2017-11-01" AND DATE(tpep_pickup_datetime) <= "2017-12-31") AND
+(DATE(tpep_dropoff_datetime) >= "2017-11-01" and DATE(tpep_dropoff_datetime) <= "2017-12-31") AND
+tpep_pickup_datetime < tpep_dropoff_datetime AND
+(passenger_count >= 1 and passenger_count <= 6) AND
+trip_distance > 0 AND
+(ratecodeid = '1' or ratecodeid = '2' or ratecodeid = '3' or ratecodeid = '4' or ratecodeid = '5' or ratecodeid = '6') AND
+fare_amount >= 0 AND 
+extra >= 0 AND
+mta_tax >= 0 AND
+tip_amount >= 0 AND
+tolls_amount >= 0 AND 
+improvement_surcharge = 0.3 AND
+(total_amount = fare_amount + extra + mta_tax + tip_amount + tolls_amount + improvement_surcharge);
+
+
+-- Checking count of records in the cleaned table
+select count(*) from yellow_trip_data_partitioned;
+-- The count of the records is 971464
+
+-- Checking number of incorrect records corresponding to each vendor
+SELECT vendor_id, COUNT(*) 
+FROM yellow_trip_data_v1 WHERE NOT(
+(DATE(tpep_pickup_datetime) >= "2017-11-01" AND DATE(tpep_pickup_datetime) <= "2017-12-31") AND
+(DATE(tpep_dropoff_datetime) >= "2017-11-01" and DATE(tpep_dropoff_datetime) <= "2017-12-31") AND
+tpep_pickup_datetime < tpep_dropoff_datetime AND
+(passenger_count >= 1 and passenger_count <= 6) AND
+trip_distance > 0 AND
+(ratecodeid = '1' or ratecodeid = '2' or ratecodeid = '3' or ratecodeid = '4' or ratecodeid = '5' or ratecodeid = '6') AND
+fare_amount >= 0 AND 
+extra >= 0 AND
+mta_tax >= 0 AND
+tip_amount >= 0 AND
+tolls_amount >= 0 AND 
+improvement_surcharge = 0.3 AND
+(total_amount = fare_amount + extra + mta_tax + tip_amount + tolls_amount + improvement_surcharge)) 
+GROUP BY 
+vendor_id;
+-- Therefore, the number of incorrect records 
+-- 1	95428
+-- 2	107677
+
+-- Therefore, vendor 2 seems to be more bad at providing correct records. Also, as we see that vendor 2 has provided more records with incorrect columns related to amount whereas
+-- if we don't consider the amount columns then vendor 1 has provided more incorrect records
+
+-- =========================================================================================================================================================================
+-- Analysis - I
+
+-- Compare the overall average fare per trip for November and December
+SELECT  MONTH(tpep_pickup_datetime), AVG(total_amount) 
+FROM yellow_trip_data_partitioned
+GROUP BY MONTH(tpep_pickup_datetime);
+-- 12	14.964514827803416
+-- 11	15.20973612372899
+-- Average fare for the month of November is a bit higher than the month of December
+
+12	16.148044600224704
+11	16.446918576574948
+
+
+
+
+-- Explore the ‘number of passengers per trip’ - how many trips are made by each level of ‘Passenger_count’? Do most people travel solo or with other people?
+SELECT passenger_count, count(*) as number_of_trips 
+FROM yellow_trip_data_partitioned
+GROUP BY passenger_count
+ORDER BY passenger_count;
+-- As we see below, most people prefer travelling solo
+-- passenger_count	number_of_trips 	passenger_count	number_of_trips
+-- 1									687557
+-- 2									147106
+-- 3									42410
+-- 4									21212
+-- 5									45447
+-- 6									27732
+
+
+
+
+
+-- Which is the most preferred mode of payment?
+SELECT payment_type, count(*) as number_of_transactions
+FROM yellow_trip_data_partitioned
+GROUP BY payment_type
+ORDER BY number_of_transactions;
+-- The most preferred mode of payment is 1 i.e. credit card
+-- payment_type	number_of_transactions
+-- 4			1254
+-- 3			4401
+-- 2			358987
+-- 1			606822
+
+
+
+
+-- What is the average tip paid per trip? Compare the average tip with the 25th, 50th and 75th percentiles and comment whether the ‘average tip’ 
+-- is a representative statistic (of the central tendency) of ‘tip amount paid’. Hint: You may use percentile_approx(DOUBLE col, p): 
+-- Returns an approximate pth percentile of a numeric column (including floating point types) in the group.
+-- Computing the average tip paid per trip
+select avg(tip_amount) as average_tip, percentile_approx(tip_amount,0.25) as 25th_percentile, 
+percentile_approx(tip_amount,0.50) as 50th_percentile, percentile_approx(tip_amount,0.75) as 75th_percentile
+from yellow_trip_data_partitioned
+-- average_tip			25th_percentile		50th_percentile		75th_percentile
+-- 1.6046343971562915	0					1.0477531508039983	2.25
+-- The average tip paid is 1.6 Dollars. Yes, average tip is a representative statistic of 50th percentile
+
+
+
+
+-- Explore the ‘Extra’ (charge) variable - what fraction of total trips have an extra charge is levied?
+select SUM(IF(extra = 0, 1, 0))/ count(*)
+from yellow_trip_data_partitioned;
+-- 0.5349421079937084
+-- Therefore, in 53.4% trips, tip was not paid i.e. 0 & 46.6% of the cases tip is paid
+
+-- =========================================================================================================================================================================
+-- Analysis-II
+
+
+-- What is the correlation between the number of passengers on any given trip, and the tip paid per trip? 
+-- Do multiple travellers tip more compared to solo travellers? Hint: Use CORR(Col_1, Col_2)
+select corr(passenger_count,tip_amount) 
+From yellow_trip_data_partitioned ;
+-- The correlation comes out to be -0.007582664966468023 which means that solo travellers pay more trip. As the number of passenger increase, the tip amount decreases as the 
+-- correlation is negative
+
+
+-- Segregate the data into five segments of ‘tip paid’: [0-5), [5-10), [10-15) , [15-20) and >=20. 
+-- Calculate the percentage share of each bucket (i.e. the fraction of trips falling in each bucket).
+SET total_rows = 971464;
+-- select count(*) from yellow_trip_data_v1;
+SELECT
+SUM(CASE WHEN tip_amount >= 0 AND tip_amount < 5 THEN 1 ELSE 0 END) * 100 / '${hiveconf:total_rows}',
+SUM(CASE WHEN tip_amount >= 5 AND tip_amount < 10 THEN 1 ELSE 0 END) * 100 / '${hiveconf:total_rows}',
+SUM(CASE WHEN tip_amount >= 10 AND tip_amount < 15 THEN 1 ELSE 0 END) * 100 / '${hiveconf:total_rows}',
+SUM(CASE WHEN tip_amount >= 15 AND tip_amount < 20 THEN 1 ELSE 0 END) * 100 / '${hiveconf:total_rows}',
+SUM(CASE WHEN tip_amount >= 20 THEN 1 ELSE 0 END) * 100 / '${hiveconf:total_rows}'
+FROM yellow_trip_data_partitioned;
+
+--	c0[0-5)				_c1[5-10)			_c2[10-15)			_c3[15-20)			_c4(>=20)
+--	94.21584330453831	4.136437376989781	1.3419951742936433	0.21719796101553943	0.08852618316273171
+
+
+-- Which month has a greater average ‘speed’ - November or December? Note that the variable ‘speed’ will have to be derived from other metrics. 
+-- Hint: You have columns for distance and time.
+SELECT month(tpep_pickup_datetime), AVG(trip_distance*60*60/(unix_timestamp(tpep_dropoff_datetime) - unix_timestamp(tpep_pickup_datetime)))
+FROM yellow_trip_data_partitioned
+group by month(tpep_pickup_datetime) limit 10;
+-- 12	10.84076812029768
+-- 11	10.756228816887964
+-- December has greater average speed than november as seen above
+
+
+
+-- Analyse the average speed of the most happening days of the year,
+-- i.e. 31st December (New year’s eve) and 25th December (Christmas) and compare it with the overall average. 
+SELECT
+AVG(CASE WHEN to_date(tpep_pickup_datetime) = "2017-12-31" THEN (trip_distance*60*60/(unix_timestamp(tpep_dropoff_datetime)- unix_timestamp(tpep_pickup_datetime))) END) AS new_year_eve,
+AVG(CASE WHEN to_date(tpep_pickup_datetime) = "2017-12-25" THEN (trip_distance*60*60/(unix_timestamp(tpep_dropoff_datetime)- unix_timestamp(tpep_pickup_datetime))) END) AS christmas_eve,  
+AVG(CASE WHEN true THEN (trip_distance*60*60/(unix_timestamp(tpep_dropoff_datetime)- unix_timestamp(tpep_pickup_datetime))) END) AS overall_average 
+FROM yellow_trip_data_partitioned;
+
+-- new_year_eve			christmas_eve		overall_average
+-- 12.946734224647676	14.740364064295093	10.7991623638537
+-- On the Christmas day the average speed is much higher i.e. 14.74 as compared to the new  year eve. The overall average is the lowest one among three.
+-- =========================================================================================================================================================================
+
+
+=== Re-evaluation
+The marks for this assignment has been deducted on two questions. I've checked the Hive solution on the platform & then applying for this re-evaluation. 
+It has been observed that my conclusions are totally matching with the ones in the provided solution. 
+
+- The first question for which marks have been deducted is:
+	- Compare the average fare for November and December.
+		- The reason given on the assessment page is:	
+			- Feedback: 
+				mnth	average_fare_amount
+				--	11		13.12
+				--	12		12.91
+				--	Average Fare amount in November is slightly higher than the same in December.
+				-- Partial marks are allotted as the process is correct but the final comparison is different from the solution answer. 
+				-- Or also partial marks are allocated if the answer is not accurate but close.
+		- The answer given on the Solution page is 
+			-- 	mnth	average_fare_amount
+			--	11		13.12
+			--	12		12.91
+			--	Average Fare amount in November is slightly higher than the same in December. 
+		- Answer submitted by me is:
+			-- 12	14.964514827803416
+			-- 11	15.20973612372899
+			-- Average fare for the month of November is a bit higher than the month of December
+		- Re-evaluation reason from my side:
+			- Definitely the values will be different as I've included more accurate filters than used in the provided assignment solution but I've stated 
+			  all the assumptions related to filtering of erroneous records as well. So, marks should not have been deducted on the basis of different values.
+			- Moreover, the conclusion provided by me is exactly same as provided in the assignment solution.
+			
+- The second question for which marks have been deducted is:
+	- Which month has a greater average 'speed' - November or December? Note that the variable 'speed' will have to be derived from other metrics.
+		- The reason given on the assessment page is:	
+			- Feedback: 
+				-- November Month has average  speed  as 10.97802043563046 Miles Per Hour
+				-- December Month has average  speed  as 11.073593998600314 Miles Per Hour
+				-- Based on average  speed  values, December Month has a greater average  speed 
+				-- Partial marks are allotted as the process is correct but the final comparison is different from the solution answer
+		- The answer given on the Solution page is 
+			-- CONCLUSION
+			-------------------
+			-- November Month has average  speed  as 10.97802043563046 Miles Per Hour
+			-- December Month has average  speed  as 11.073593998600314 Miles Per Hour
+			-- Based on average  speed  values, December Month has a greater average speed 
+		- Answer submitted by me is: 
+			-- 12	10.84076812029768
+			-- 11	10.756228816887964
+			-- December has greater average speed than november as seen above
+		- Re-evaluation reason from my side:
+			- Definitely the values will be different as I've included more filters than used in the provided assignment solution but I've stated 
+			  all the assumptions related to filtering of erroneous records as well. So, marks should not have been deducted on the basis of different values.
+			- Moreover, the conclusion provided by me is exactly same as provided in the assignment solution.
+			
+	
